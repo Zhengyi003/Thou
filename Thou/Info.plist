@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>OpenClawBootstrapHost</key>
+	<string>mac-mini.tailab4be7.ts.net</string>
+	<key>OpenClawBootstrapPort</key>
+	<integer>8080</integer>
+	<key>OpenClawBootstrapToken</key>
+	<string>$(OPENCLAW_BOOTSTRAP_TOKEN)</string>
+</dict>
+</plist>

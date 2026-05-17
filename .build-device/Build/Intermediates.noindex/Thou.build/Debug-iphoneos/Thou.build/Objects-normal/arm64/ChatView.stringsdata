@@ -1,0 +1,160 @@
+{
+  "source": "/Users/lizhengyi/Documents/Thou/Thou/Views/ChatView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "完成",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "Alice 联调状态",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 108
+        }
+      },
+      {
+        "comment": "",
+        "key": "Key 来源: %@",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 115
+        }
+      },
+      {
+        "comment": "",
+        "key": "Key 摘要: %@",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 119
+        }
+      },
+      {
+        "comment": "",
+        "key": "记忆状态: %@",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 133
+        }
+      },
+      {
+        "comment": "",
+        "key": "当前显示 %lld 轮，完整会话已记录 %lld 轮",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 143
+        }
+      },
+      {
+        "comment": "",
+        "key": "It's all about you...",
+        "location": {
+          "startingColumn": 21,
+          "startingLine": 187
+        }
+      },
+      {
+        "comment": "",
+        "key": "Alice 配置",
+        "location": {
+          "startingColumn": 56,
+          "startingLine": 251
+        }
+      },
+      {
+        "comment": "",
+        "key": "OpenClaw 配置",
+        "location": {
+          "startingColumn": 73,
+          "startingLine": 251
+        }
+      },
+      {
+        "comment": "",
+        "key": "Fun",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 318
+        }
+      },
+      {
+        "comment": "",
+        "key": "这个页面先保留为占位，后续再补具体内容。",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 319
+        }
+      },
+      {
+        "comment": "",
+        "key": "关于 Thou",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 333
+        }
+      },
+      {
+        "comment": "",
+        "key": "Thou 是一款极简的 AI 社交陪伴与远程控制工具。",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 334
+        }
+      },
+      {
+        "comment": "",
+        "key": "Alice 模式：基于云端大模型的智能陪伴。",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 335
+        }
+      },
+      {
+        "comment": "",
+        "key": "OpenClaw 模式：直连本地 Mac 的 AI 代理。",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 336
+        }
+      },
+      {
+        "comment": "",
+        "key": "Readme",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 349
+        }
+      },
+      {
+        "comment": "",
+        "key": "Fun (Coming Soon)",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 350
+        }
+      },
+      {
+        "comment": "",
+        "key": "返回聊天",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 353
+        }
+      },
+      {
+        "comment": "",
+        "key": "Thinking...",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 386
+        }
+      }
+    ]
+  },
+  "version": 1
+}

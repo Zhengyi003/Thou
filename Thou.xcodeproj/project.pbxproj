@@ -6,20 +6,31 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		FEA0CDC02F26395C00F73B71 /* 说明.docc in Sources */ = {isa = PBXBuildFile; fileRef = FEA0CDBF2F26395C00F73B71 /* 说明.docc */; };
-		FEA0CDC22F26397000F73B71 /* 进度.docc in Sources */ = {isa = PBXBuildFile; fileRef = FEA0CDC12F26397000F73B71 /* 进度.docc */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
-		FEA0CDBF2F26395C00F73B71 /* 说明.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = "说明.docc"; sourceTree = "<group>"; };
-		FEA0CDC12F26397000F73B71 /* 进度.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = "进度.docc"; sourceTree = "<group>"; };
 		FECC8C472F1FB32D008281F9 /* Thou.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Thou.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		FE3ECF702F63AC2B006685EC /* Exceptions for "Thou" folder in "Thou" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FECC8C462F1FB32D008281F9 /* Thou */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		FE616C7A2F53123F00E5CEB2 /* Thou (iOS) */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Thou (iOS)";
+			sourceTree = "<group>";
+		};
 		FECC8C492F1FB32D008281F9 /* Thou */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FE3ECF702F63AC2B006685EC /* Exceptions for "Thou" folder in "Thou" target */,
+			);
 			path = Thou;
 			sourceTree = "<group>";
 		};
@@ -36,27 +47,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		FEA0CDB92F26347600F73B71 /* Thou (iOS) */ = {
-			isa = PBXGroup;
-			children = (
-				FEA0CDBF2F26395C00F73B71 /* 说明.docc */,
-				FEA0CDC12F26397000F73B71 /* 进度.docc */,
-			);
-			path = "Thou (iOS)";
-			sourceTree = "<group>";
-		};
-		FEA0CDBA2F26349A00F73B71 /* Specifications */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Specifications;
-			sourceTree = "<group>";
-		};
 		FECC8C3E2F1FB32D008281F9 = {
 			isa = PBXGroup;
 			children = (
-				FEA0CDBA2F26349A00F73B71 /* Specifications */,
-				FEA0CDB92F26347600F73B71 /* Thou (iOS) */,
+				FE616C7A2F53123F00E5CEB2 /* Thou (iOS) */,
 				FECC8C492F1FB32D008281F9 /* Thou */,
 				FECC8C482F1FB32D008281F9 /* Products */,
 			);
@@ -86,6 +80,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				FE616C7A2F53123F00E5CEB2 /* Thou (iOS) */,
 				FECC8C492F1FB32D008281F9 /* Thou */,
 			);
 			name = Thou;
@@ -144,8 +139,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FEA0CDC02F26395C00F73B71 /* 说明.docc in Sources */,
-				FEA0CDC22F26397000F73B71 /* 进度.docc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -278,8 +271,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KN4UHV43S9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Thou/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -290,6 +285,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OPENCLAW_BOOTSTRAP_TOKEN = 5814c7b4f5d99209;
 				PRODUCT_BUNDLE_IDENTIFIER = Zheng.Thou;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -309,8 +305,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KN4UHV43S9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Thou/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -321,6 +319,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OPENCLAW_BOOTSTRAP_TOKEN = "";
 				PRODUCT_BUNDLE_IDENTIFIER = Zheng.Thou;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

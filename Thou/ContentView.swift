@@ -1,24 +1,16 @@
-//
-//  ContentView.swift
-//  Thou
-//
-//  Created by 李正一 on 2026/1/20.
-//
+/**
+ Thou 应用的主界面入口。
+
+ 这个文件负责把根导航容器和主聊天视图接到一起，
+ 让 Alice / OpenClaw 的统一聊天壳在应用启动后成为默认首页。
+ */
 
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationView {
+            ChatView(viewModel: ChatViewModel())
         }
-        .padding()
     }
-}
-
-#Preview {
-    ContentView()
 }

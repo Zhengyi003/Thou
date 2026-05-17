@@ -1,0 +1,74 @@
+{
+  "buildCommand" : {
+    "command" : "build",
+    "skipDependencies" : false,
+    "style" : "buildOnly"
+  },
+  "configuredTargets" : [
+    {
+      "guid" : "61b79e438d2f4020e3122336ee4360be2a5560f810bdd263e3a80037a31a48b4"
+    }
+  ],
+  "containerPath" : "/Users/lizhengyi/Documents/Thou/Thou.xcodeproj",
+  "continueBuildingAfterErrors" : false,
+  "dependencyScope" : "workspace",
+  "enableIndexBuildArena" : false,
+  "hideShellScriptEnvironment" : false,
+  "parameters" : {
+    "action" : "build",
+    "activeArchitecture" : "arm64",
+    "activeRunDestination" : {
+      "disableOnlyActiveArch" : false,
+      "hostTargetedPlatform" : null,
+      "platform" : "iphoneos",
+      "sdk" : "iphoneos26.4",
+      "sdkVariant" : "iphoneos",
+      "supportedArchitectures" : [
+        "arm64e",
+        "arm64"
+      ],
+      "targetArchitecture" : "arm64"
+    },
+    "arenaInfo" : {
+      "buildIntermediatesPath" : "/Users/lizhengyi/Documents/Thou/.build-device/Build/Intermediates.noindex",
+      "buildProductsPath" : "/Users/lizhengyi/Documents/Thou/.build-device/Build/Products",
+      "derivedDataPath" : "/Users/lizhengyi/Documents/Thou/.build-device",
+      "indexDataStoreFolderPath" : "/Users/lizhengyi/Documents/Thou/.build-device/Index.noindex/DataStore",
+      "indexEnableDataStore" : true,
+      "indexPCHPath" : "/Users/lizhengyi/Documents/Thou/.build-device/Index.noindex/PrecompiledHeaders",
+      "pchPath" : "/Users/lizhengyi/Documents/Thou/.build-device/Build/Intermediates.noindex/PrecompiledHeaders"
+    },
+    "configurationName" : "Debug",
+    "overrides" : {
+      "commandLine" : {
+        "table" : {
+
+        }
+      },
+      "synthesized" : {
+        "table" : {
+          "ACTION" : "build",
+          "ASSETCATALOG_FILTER_FOR_DEVICE_MODEL" : "iPhone18,4",
+          "ASSETCATALOG_FILTER_FOR_DEVICE_OS_VERSION" : "26.4",
+          "ASSETCATALOG_FILTER_FOR_THINNING_DEVICE_CONFIGURATION" : "iPhone18,4",
+          "BUILD_ACTIVE_RESOURCES_ONLY" : "YES",
+          "COLOR_DIAGNOSTICS" : "YES",
+          "diagnostic_message_length" : "80",
+          "ENABLE_PREVIEWS" : "NO",
+          "ENABLE_XOJIT_PREVIEWS" : "YES",
+          "ONLY_ACTIVE_ARCH" : "YES",
+          "TARGET_DEVICE_IDENTIFIER" : "00008150-001874643E02401C",
+          "TARGET_DEVICE_MODEL" : "iPhone18,4",
+          "TARGET_DEVICE_OS_VERSION" : "26.4",
+          "TARGET_DEVICE_PLATFORM_NAME" : "iphoneos"
+        }
+      }
+    }
+  },
+  "schemeCommand" : "launch",
+  "showNonLoggedProgress" : true,
+  "useDryRun" : false,
+  "useImplicitDependencies" : true,
+  "useLegacyBuildLocations" : false,
+  "useParallelTargets" : true
+}

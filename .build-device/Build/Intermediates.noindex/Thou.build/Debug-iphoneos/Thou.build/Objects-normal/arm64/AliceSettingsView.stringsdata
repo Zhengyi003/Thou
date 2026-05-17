@@ -1,0 +1,88 @@
+{
+  "source": "/Users/lizhengyi/Documents/Thou/Thou/Alice/Views/AliceSettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "OpenRouter API Key",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "Alice 默认模型",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "获取方式：访问 openrouter.ai 生成 API Key。",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 32
+        }
+      },
+      {
+        "comment": "",
+        "key": "如果模拟器复制粘贴不可靠，可直接编辑 Thou/Alice/Config/AliceLocalSecrets.plist 里的 OpenRouterAPIKey，然后重新 build。",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 36
+        }
+      },
+      {
+        "comment": "",
+        "key": "填好后回到 Alice 聊天页直接发送一条消息，上方会显示 retrieve / reasoning / 正文 的联调状态。",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "若 iPhone 真机上的 Alice 报 OpenRouter HTTP 500，先临时关闭 Tailscale / VPN 再试；当前已确认它会显著放大失败概率，但并不是唯一条件。",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 44
+        }
+      },
+      {
+        "comment": "",
+        "key": "当前记忆状态：%@",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 51
+        }
+      },
+      {
+        "comment": "",
+        "key": "会清空当前 Alice 的 Sessions、Messages、Topics、Impressions，并重置本地 session 锚点；不会删除 API Key 和模型设置。",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 61
+        }
+      },
+      {
+        "comment": "",
+        "key": "sk-or-...",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 22
+        }
+      },
+      {
+        "comment": "",
+        "key": "重置 Alice 测试环境",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 56
+        }
+      }
+    ]
+  },
+  "version": 1
+}
