@@ -16,55 +16,28 @@ class ChatViewModel: ObservableObject {
     @Published var currentPage: PageType = .chat
     
     private var cancellables = Set<AnyCancellable>()
-    let aliceModule: AliceChatViewModel
     let clawModule: OpenClawChatViewModel
     
-    init(
-        aliceModule: AliceChatViewModel,
-        clawModule: OpenClawChatViewModel
-    ) {
-        self.aliceModule = aliceModule
+    init(clawModule: OpenClawChatViewModel) {
         self.clawModule = clawModule
         bindModuleState()
     }
 
     convenience init() {
-        self.init(
-            aliceModule: AliceChatViewModel(),
-            clawModule: OpenClawChatViewModel()
-        )
+        self.init(clawModule: OpenClawChatViewModel())
     }
 
     var currentRounds: [Round] {
-        switch currentMode {
-        case .alice:
-            return aliceModule.rounds
-        case .claw:
-            return clawModule.rounds
-        }
+        clawModule.rounds
     }
 
     var currentDraft: String {
         get {
-            switch currentMode {
-            case .alice:
-                return aliceModule.draft
-            case .claw:
-                return clawModule.draft
-            }
+            clawModule.draft
         }
         set {
-            switch currentMode {
-            case .alice:
-                aliceModule.draft = newValue
-            case .claw:
-                clawModule.draft = newValue
-            }
+            clawModule.draft = newValue
         }
-    }
-
-    var aliceRounds: [Round] {
-        aliceModule.rounds
     }
 
     var clawRounds: [Round] {
@@ -72,82 +45,7 @@ class ChatViewModel: ObservableObject {
     }
 
     var isSending: Bool {
-        switch currentMode {
-        case .alice:
-            return aliceModule.isSending
-        case .claw:
-            return clawModule.isSending
-        }
-    }
-
-    var aliceApiKey: String {
-        get { aliceModule.apiKey }
-        set { aliceModule.apiKey = newValue }
-    }
-
-    var aliceModel: String {
-        get { aliceModule.model }
-        set { aliceModule.model = newValue }
-    }
-
-    var aliceAPIKeySourceDescription: String {
-        aliceModule.configStore.apiKeySourceDescription
-    }
-
-    var aliceAPIKeyDebugSummary: String {
-        aliceModule.configStore.apiKeyDebugSummary
-    }
-
-    var aliceRequestStatus: String {
-        aliceModule.requestStatus
-    }
-
-    var aliceLastErrorMessage: String? {
-        aliceModule.lastErrorMessage
-    }
-
-    var aliceLastRetrievedTopicTitles: [String] {
-        aliceModule.lastRetrievedTopicTitles
-    }
-
-    var aliceDidReceiveReasoning: Bool {
-        aliceModule.didReceiveReasoning
-    }
-
-    var aliceDidReceiveContent: Bool {
-        aliceModule.didReceiveContent
-    }
-
-    var aliceLastModelResponseSummary: String {
-        aliceModule.lastModelResponseSummary
-    }
-
-    var aliceConversationHistoryRoundCount: Int {
-        aliceModule.conversationHistoryRoundCount
-    }
-
-    var aliceActiveWindowRoundCount: Int {
-        aliceModule.activeWindowRoundCount
-    }
-
-    var aliceLastArchiveSummary: String {
-        aliceModule.lastArchiveSummary
-    }
-
-    var aliceLastArchiveArchivedRoundCount: Int {
-        aliceModule.lastArchiveArchivedRoundCount
-    }
-
-    var aliceDidTrimActiveRounds: Bool {
-        aliceModule.didTrimActiveRounds
-    }
-
-    var aliceMemoryStatusText: String {
-        aliceModule.memoryStatusText
-    }
-
-    var aliceIsRecallingMemory: Bool {
-        aliceModule.isRecallingMemory
+        clawModule.isSending
     }
 
     var pairingCode: String {
@@ -187,6 +85,38 @@ class ChatViewModel: ObservableObject {
         clawModule.hasStoredManualToken
     }
 
+    var clawIsShowingAgentInbox: Bool {
+        clawModule.isShowingAgentInbox
+    }
+
+    var clawIsShowingSessionPicker: Bool {
+        clawModule.isShowingSessionPicker
+    }
+
+    var clawAgentSummaries: [OpenClawAgentSummary] {
+        clawModule.agentSummaries
+    }
+
+    var clawSelectedAgentName: String {
+        clawModule.selectedAgentName
+    }
+
+    var clawSelectedSessionTitle: String {
+        clawModule.selectedSessionTitle
+    }
+
+    var clawSelectedSessionKey: String {
+        clawModule.selectedSessionKey
+    }
+
+    var clawSelectedSessionPreview: String? {
+        clawModule.selectedSessionPreview
+    }
+
+    var clawSessionPickerItems: [OpenClawSessionPickerItem] {
+        clawModule.sessionPickerItems
+    }
+
     var clawCanReconnectAutomatically: Bool {
         clawModule.canReconnectAutomatically
     }
@@ -196,27 +126,12 @@ class ChatViewModel: ObservableObject {
     }
 
     private func bindModuleState() {
-        aliceModule.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
         clawModule.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
-    }
-    
-    func switchMode() {
-        if currentMode == .alice {
-            currentMode = .claw
-        } else {
-            currentMode = .alice
-        }
     }
     
     func toggleSettings() {
@@ -231,6 +146,14 @@ class ChatViewModel: ObservableObject {
         clawModule.connect()
     }
 
+    func disconnectClaw() {
+        clawModule.disconnect()
+    }
+
+    func handleAppDidBecomeActive() {
+        clawModule.handleAppDidBecomeActive()
+    }
+
     func loadRememberedClawTarget(_ target: OpenClawConnectionTarget) {
         clawModule.loadRememberedTarget(target)
     }
@@ -238,18 +161,30 @@ class ChatViewModel: ObservableObject {
     func importClawConnectionInfo(_ rawText: String) {
         clawModule.importConnectionInfo(from: rawText)
     }
+
+    func showClawAgentInbox() {
+        clawModule.showAgentInbox()
+    }
+
+    func selectClawAgent(_ agentId: String) {
+        clawModule.selectAgent(agentId)
+    }
+
+    func toggleClawSessionPicker() {
+        clawModule.toggleSessionPicker()
+    }
+
+    func hideClawSessionPicker() {
+        clawModule.hideSessionPicker()
+    }
+
+    func selectClawSession(_ sessionKey: String) {
+        clawModule.selectSession(sessionKey)
+    }
     
     func sendMessage(_ text: String) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
-        if currentMode == .alice {
-            await aliceModule.sendMessage(text)
-        } else {
-            await clawModule.sendMessage(text)
-        }
-    }
 
-    func resetAliceEnvironment() async {
-        await aliceModule.resetEnvironment()
+        await clawModule.sendMessage(text)
     }
 }

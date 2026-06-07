@@ -8,9 +8,18 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var viewModel = ChatViewModel()
+
     var body: some View {
         NavigationView {
-            ChatView(viewModel: ChatViewModel())
+            ChatView(viewModel: viewModel)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else {
+                return
+            }
+            viewModel.handleAppDidBecomeActive()
         }
     }
 }

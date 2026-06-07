@@ -10,7 +10,6 @@ import UIKit
 
 struct OpenClawSettingsView: View {
     @Binding var connectionMode: OpenClawConnectionMode
-    @Binding var pairingCode: String
     @Binding var manualHost: String
     @Binding var manualPort: String
     @Binding var manualToken: String
@@ -21,6 +20,7 @@ struct OpenClawSettingsView: View {
     let onLoadRememberedTarget: (OpenClawConnectionTarget) -> Void
     let onImportConnectionText: (String) -> Void
     let onConnect: () -> Void
+    let onDisconnect: () -> Void
 
     @State private var showAdvancedOptions = false
 
@@ -28,25 +28,15 @@ struct OpenClawSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             importSection
 
-            Button(showAdvancedOptions ? "收起高级连接选项" : "显示高级连接选项") {
+            Button(showAdvancedOptions ? "收起远程连接选项" : "显示远程连接选项") {
                 showAdvancedOptions.toggle()
             }
             .font(.caption)
 
             if showAdvancedOptions {
-                Picker("连接方式", selection: $connectionMode) {
-                    Text("神奇配对码").tag(OpenClawConnectionMode.pairing)
-                    Text("手动地址").tag(OpenClawConnectionMode.manualHost)
-                }
-                .pickerStyle(.segmented)
+                manualHostSection
 
-                if connectionMode == .pairing {
-                    pairingSection
-                } else {
-                    manualHostSection
-                }
-
-                if !rememberedTargets.isEmpty {
+                if !remoteRememberedTargets.isEmpty {
                     rememberedTargetsSection
                 }
             }
@@ -66,9 +56,26 @@ struct OpenClawSettingsView: View {
             }
             .disabled(isConnected || !canConnect)
 
+            if isConnected {
+                Button(action: onDisconnect) {
+                    Text("断开连接")
+                        .bold()
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+            }
+
             Text(helpText)
                 .font(.caption)
                 .foregroundColor(.gray)
+        }
+        .onAppear {
+            if connectionMode != .manualHost {
+                connectionMode = .manualHost
+            }
         }
     }
 
@@ -78,7 +85,7 @@ struct OpenClawSettingsView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            Text("先在 Mac 端 OpenClaw 的 Thou 设置卡片里复制连接信息，再回到这里直接粘贴。首次成功后，后续会尽量自动恢复连接。")
+            Text("先在 Mac 端 OpenClaw 的 Thou 设置卡片里复制连接信息，再回到这里直接粘贴。首次成功后，后续会尽量自动恢复远程连接。")
                 .font(.caption)
                 .foregroundColor(.gray)
 
@@ -101,44 +108,13 @@ struct OpenClawSettingsView: View {
         .cornerRadius(14)
     }
 
-    private var pairingSection: some View {
-        Group {
-            Text("神奇配对码")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            TextField("XXXX-XXXX-XXXX", text: $pairingCode)
-                .textFieldStyle(.roundedBorder)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled(true)
-
-            HStack(spacing: 12) {
-                Button("粘贴配对码") {
-                    let pasted = UIPasteboard.general.string?
-                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    if !pasted.isEmpty {
-                        pairingCode = pasted
-                    }
-                }
-                .font(.caption)
-
-                if !pairingCode.isEmpty {
-                    Button("清空") {
-                        pairingCode = ""
-                    }
-                    .font(.caption)
-                }
-            }
-        }
-    }
-
     private var manualHostSection: some View {
         Group {
             Text("远程地址")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            TextField("主机或域名，例如 100.x.x.x / example.ts.net", text: $manualHost)
+            TextField("主机地址，例如 100.x.x.x", text: $manualHost)
                 .textFieldStyle(.roundedBorder)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
@@ -157,7 +133,11 @@ struct OpenClawSettingsView: View {
                     let pasted = UIPasteboard.general.string?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     if !pasted.isEmpty {
-                        manualToken = pasted
+                        if let card = OpenClawImportedConnectionCard.parse(from: pasted) {
+                            manualToken = card.token
+                        } else {
+                            manualToken = pasted
+                        }
                     }
                 }
                 .font(.caption)
@@ -179,16 +159,20 @@ struct OpenClawSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.gray)
             }
+
+            Text("如果剪贴板里还是整段连接信息，点“粘贴口令”会自动抽取其中的完整口令。")
+                .font(.caption)
+                .foregroundColor(.gray)
         }
     }
 
     private var rememberedTargetsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("已记住的连接目标")
+            Text("已记住的远程目标")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            ForEach(rememberedTargets) { target in
+            ForEach(remoteRememberedTargets) { target in
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(target.host):\(target.port)")
@@ -212,25 +196,24 @@ struct OpenClawSettingsView: View {
                 .cornerRadius(10)
             }
 
-            Text("配对模式连接时，系统会先尝试局域网，再尝试这些已记住的目标；手动模式下可把它们载入后再微调。")
+            Text("这些目标主要用于远程重连和手动切换。")
                 .font(.caption)
                 .foregroundColor(.gray)
         }
     }
 
     private var canConnect: Bool {
-        switch connectionMode {
-        case .pairing:
-            return !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .manualHost:
-            return !manualHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !manualToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !(manualPort.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
+        !manualHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !manualToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !(manualPort.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private var helpText: String {
-        "若自动恢复失败，可重新粘贴连接信息；高级连接选项保留给手动排查和局域网配对。"
+        "若自动恢复失败，可重新粘贴连接信息；远程连接选项保留给手动排查和切换地址。"
+    }
+
+    private var remoteRememberedTargets: [OpenClawConnectionTarget] {
+        rememberedTargets.filter { $0.source != .lanHint }
     }
 
     private func targetDescription(for target: OpenClawConnectionTarget) -> String {

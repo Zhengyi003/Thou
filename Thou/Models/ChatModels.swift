@@ -19,6 +19,25 @@ enum PageType: Equatable {
     case fun
 }
 
+struct OpenClawAgentSummary: Identifiable, Equatable {
+    let id: String
+    var name: String
+    var subtitle: String
+    var lastPreview: String?
+    var updatedAt: Date?
+    var unreadCount: Int = 0
+}
+
+struct OpenClawSessionPickerItem: Identifiable, Equatable {
+    let key: String
+    var title: String
+    var preview: String?
+    var updatedAt: Date?
+    var isMain: Bool = false
+
+    var id: String { key }
+}
+
 enum OpenClawConnectionMode: String, Codable, CaseIterable {
     case pairing = "pairing"
     case manualHost = "manualHost"

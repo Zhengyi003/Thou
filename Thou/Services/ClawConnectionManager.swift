@@ -32,9 +32,16 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     private var currentConnectionCandidateIndex: Int = 0
     private var currentConnectionURL: URL?
     private var pingTimer: Timer?
+    private var heartbeatTimeoutWorkItem: DispatchWorkItem?
+    private var awaitingHeartbeatPong = false
+    private var connectionAttemptTimeoutWorkItem: DispatchWorkItem?
     private var pendingRequests: [String: (Result<[String: Any], Error>) -> Void] = [:]
     private let deviceId: String
     private let deviceLabel: String
+    private let connectionAttemptTimeout: TimeInterval = 8
+    private let heartbeatInterval: TimeInterval = 15
+    private let heartbeatGracePeriod: TimeInterval = 8
+    private(set) var didUserDisconnectManually = false
 
     override init() {
         let defaults = UserDefaults.standard
@@ -87,6 +94,7 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     }
 
     func connect(targets: [OpenClawConnectionTarget], token: String) {
+        didUserDisconnectManually = false
         let normalizedTargets = targets.compactMap { target in
             normalizeConnectionTarget(from: target.host, fallbackPort: target.port).map { resolved in
                 OpenClawConnectionTarget(host: resolved.host, port: resolved.port, source: target.source)
@@ -110,6 +118,7 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         }
 
         stopHeartbeat()
+        cancelConnectionAttemptTimeout()
         session?.invalidateAndCancel()
         session = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
@@ -137,6 +146,7 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     }
 
     func connect(host: String, port: Int = 8080, token: String) {
+        didUserDisconnectManually = false
         guard let target = normalizeConnectionTarget(from: host, fallbackPort: port) else {
             DispatchQueue.main.async {
                 self.connectionStatus = "连接失败: 主机地址格式无效"
@@ -156,6 +166,7 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         }
 
         stopHeartbeat()
+        cancelConnectionAttemptTimeout()
         session?.invalidateAndCancel()
         session = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
@@ -164,11 +175,8 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     }
 
     private func buildConnectionCandidates(from targets: [OpenClawConnectionTarget]) -> [URL] {
-        let rawCandidates = targets.flatMap { target in
-            [
-                "ws://\(target.host):\(target.port)/thou",
-                "ws://\(target.host):\(target.port)"
-            ]
+        let rawCandidates = targets.map { target in
+            "ws://\(target.host):\(target.port)/thou"
         }
         return Array(NSOrderedSet(array: rawCandidates.compactMap { URL(string: $0) })) as? [URL] ?? []
     }
@@ -271,11 +279,14 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
 
         let url = connectionCandidates[currentConnectionCandidateIndex]
         currentConnectionURL = url
+        cancelConnectionAttemptTimeout()
 
         print("ClawConnectionManager: Connecting to \(url.absoluteString)")
 
         DispatchQueue.main.async {
-            self.connectionStatus = "正在连接 \(self.describe(url: url))..."
+            let index = self.currentConnectionCandidateIndex + 1
+            let total = self.connectionCandidates.count
+            self.connectionStatus = "正在连接 (\(index)/\(total)) \(self.describe(url: url))..."
         }
 
         let configuration = URLSessionConfiguration.default
@@ -290,27 +301,96 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         self.session = session
         webSocketTask = session.webSocketTask(with: url)
         webSocketTask?.resume()
+
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard !self.isConnected,
+                  self.currentConnectionURL == url,
+                  self.currentConnectionCandidateIndex < self.connectionCandidates.count,
+                  self.connectionCandidates[self.currentConnectionCandidateIndex] == url else {
+                return
+            }
+
+            print("WebSocket attempt timed out on \(self.describe(url: url))")
+            self.webSocketTask?.cancel(with: .goingAway, reason: nil)
+            self.session?.invalidateAndCancel()
+            self.session = nil
+            self.webSocketTask = nil
+
+            if self.advanceToNextConnectionCandidate() {
+                return
+            }
+
+            self.markDisconnected("连接失败: \(self.describe(url: url))，连接超时")
+        }
+        connectionAttemptTimeoutWorkItem = timeoutWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + connectionAttemptTimeout, execute: timeoutWorkItem)
+    }
+
+    private func cancelConnectionAttemptTimeout() {
+        connectionAttemptTimeoutWorkItem?.cancel()
+        connectionAttemptTimeoutWorkItem = nil
     }
 
     private func startHeartbeat() {
         stopHeartbeat()
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+        pingTimer = Timer.scheduledTimer(withTimeInterval: heartbeatInterval, repeats: true) { [weak self] _ in
             guard let self = self, self.isConnected else { return }
+            if self.awaitingHeartbeatPong {
+                self.handleHeartbeatFailure(status: "与 OpenClaw 的连接已失效，请重新连接")
+                return
+            }
+
+            self.awaitingHeartbeatPong = true
+            let timeoutWorkItem = DispatchWorkItem { [weak self] in
+                guard let self, self.isConnected, self.awaitingHeartbeatPong else { return }
+                self.handleHeartbeatFailure(status: "与 OpenClaw 的连接已失效，请重新连接")
+            }
+            self.heartbeatTimeoutWorkItem = timeoutWorkItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + heartbeatGracePeriod, execute: timeoutWorkItem)
+
             self.webSocketTask?.sendPing { error in
-                if let error = error {
-                    print("WebSocket ping error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.cancelHeartbeatTimeout()
+                    if let error = error {
+                        print("WebSocket ping error: \(error.localizedDescription)")
+                        self.handleHeartbeatFailure(status: self.describeConnectionError(error, attemptedURL: self.currentConnectionURL))
+                        return
+                    }
+
+                    self.awaitingHeartbeatPong = false
                 }
             }
         }
     }
 
+    private func cancelHeartbeatTimeout() {
+        heartbeatTimeoutWorkItem?.cancel()
+        heartbeatTimeoutWorkItem = nil
+    }
+
     private func stopHeartbeat() {
         pingTimer?.invalidate()
         pingTimer = nil
+        cancelHeartbeatTimeout()
+        awaitingHeartbeatPong = false
+    }
+
+    private func handleHeartbeatFailure(status: String) {
+        guard isConnected else {
+            return
+        }
+
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        session?.invalidateAndCancel()
+        session = nil
+        webSocketTask = nil
+        markDisconnected(status)
     }
 
     private func markDisconnected(_ status: String) {
         stopHeartbeat()
+        cancelConnectionAttemptTimeout()
         failPendingRequests(error: NSError(domain: "ClawConnectionManager", code: -1, userInfo: [NSLocalizedDescriptionKey: status]))
         DispatchQueue.main.async {
             self.isConnected = false
@@ -376,6 +456,11 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     // MARK: - URLSessionWebSocketDelegate
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        guard webSocketTask === self.webSocketTask else {
+            return
+        }
+
+        cancelConnectionAttemptTimeout()
         print("WebSocket 握手成功！")
         DispatchQueue.main.async {
             let target = self.currentConnectionURL.map(self.describe(url:)) ?? "目标地址"
@@ -393,6 +478,11 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     }
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        guard webSocketTask === self.webSocketTask else {
+            return
+        }
+
+        cancelConnectionAttemptTimeout()
         let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? ""
         print("WebSocket closed: code=\(closeCode.rawValue) reason=\(reasonText)")
         let target = currentConnectionURL.map(describe(url:)) ?? "目标地址"
@@ -401,6 +491,10 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let currentTask = webSocketTask, task !== currentTask {
+            return
+        }
+
         if let error = error {
             if isConnected && (error as NSError).code == -1001 {
                 print("忽略已连接状态下的假性超时错误")
@@ -437,6 +531,9 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         webSocketTask?.send(.string(string)) { error in
             if let error = error {
                 print("WebSocket send error: \(error)")
+                DispatchQueue.main.async {
+                    self.handleHeartbeatFailure(status: self.describeConnectionError(error, attemptedURL: self.currentConnectionURL))
+                }
             }
         }
     }
@@ -567,19 +664,49 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         )
     }
     
-    func sendMessage(_ text: String, sessionKey: String? = nil) {
+    func sendMessage(_ text: String, sessionKey: String? = nil, agentId: String? = nil) {
         var msg: [String: Any] = [
             "type": "chat",
             "text": text
         ]
+        if let agentId, !agentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            msg["agentId"] = agentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let sessionKey, !sessionKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             msg["sessionKey"] = sessionKey.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         sendJSON(msg)
     }
 
-    func fetchSessions(limit: Int = 12) async throws -> [ClawSessionSummary] {
-        let response = try await sendRequest(type: "sessions.list", payload: ["limit": limit])
+    func fetchAgents() async throws -> [OpenClawAgentSummary] {
+        let response = try await sendRequest(type: "agents.list")
+        let rawAgents = response["agents"] as? [[String: Any]] ?? []
+        return rawAgents.compactMap { raw in
+            guard let id = raw["id"] as? String, !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return nil
+            }
+
+            let name = ((raw["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? id
+            let workspace = (raw["workspace"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let subtitle = workspace?.isEmpty == false ? workspace! : "Agent ID: \(id)"
+            return OpenClawAgentSummary(
+                id: id,
+                name: name,
+                subtitle: subtitle,
+                lastPreview: nil,
+                updatedAt: nil,
+                unreadCount: 0
+            )
+        }
+    }
+
+    func fetchSessions(agentId: String? = nil, limit: Int = 12) async throws -> [ClawSessionSummary] {
+        var payload: [String: Any] = ["limit": limit]
+        if let agentId, !agentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["agentId"] = agentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let response = try await sendRequest(type: "sessions.list", payload: payload)
         let rawSessions = response["sessions"] as? [[String: Any]] ?? []
         return rawSessions.compactMap { raw in
             guard let key = raw["key"] as? String, !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -599,8 +726,11 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         }
     }
 
-    func createSession(label: String? = nil) async throws -> ClawSessionSummary {
+    func createSession(agentId: String? = nil, label: String? = nil) async throws -> ClawSessionSummary {
         var payload: [String: Any] = [:]
+        if let agentId, !agentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["agentId"] = agentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["label"] = label.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -620,10 +750,13 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
         return ClawSessionSummary(key: key, title: title, preview: preview?.isEmpty == true ? nil : preview, updatedAt: updatedAt)
     }
 
-    func fetchHistory(sessionKey: String? = nil, limit: Int = 80) async throws -> [ClawHistoryMessage] {
+    func fetchHistory(agentId: String? = nil, sessionKey: String? = nil, limit: Int = 80) async throws -> [ClawHistoryMessage] {
         var payload: [String: Any] = [
             "limit": max(1, min(limit, 200))
         ]
+        if let agentId, !agentId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["agentId"] = agentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let sessionKey, !sessionKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["sessionKey"] = sessionKey.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -668,6 +801,7 @@ class ClawConnectionManager: NSObject, ObservableObject, URLSessionWebSocketDele
     }
     
     func disconnect() {
+        didUserDisconnectManually = true
         stopHeartbeat()
         failPendingRequests(error: NSError(domain: "ClawConnectionManager", code: -7, userInfo: [NSLocalizedDescriptionKey: "连接已断开"]))
         webSocketTask?.cancel(with: .goingAway, reason: nil)

@@ -1,8 +1,8 @@
 /**
  Thou 主聊天页的 SwiftUI 视图实现。
 
- 这个文件负责把 ChatViewModel 提供的状态渲染成 Alice / OpenClaw 双模式页面，
- 同时承接设置页、聊天列表和输入区的具体布局。
+ 这个文件当前只渲染 OpenClaw companion 首发 UI，
+ 并承接设置页、agent 列表、聊天列表和输入区布局。
  */
 
 import SwiftUI
@@ -26,11 +26,15 @@ struct ChatView: View {
                 }
             }
             
-            if viewModel.currentPage == .chat {
+            if viewModel.currentPage == .chat && !(viewModel.currentMode == .claw && viewModel.clawIsShowingAgentInbox) {
                 inputBar
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                leadingToolbarItem
+            }
+
             ToolbarItem(placement: .principal) {
                 titleMenu
             }
@@ -48,136 +52,66 @@ struct ChatView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "选择 Session",
+            isPresented: Binding(
+                get: { viewModel.currentMode == .claw && viewModel.currentPage == .chat && viewModel.clawIsShowingSessionPicker },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.hideClawSessionPicker()
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            ForEach(viewModel.clawSessionPickerItems) { session in
+                Button(sessionTitle(session)) {
+                    viewModel.selectClawSession(session.key)
+                }
+            }
+
+            Button("取消", role: .cancel) {
+                viewModel.hideClawSessionPicker()
+            }
+        }
     }
 
     // MARK: - Subviews
 
     private var chatPager: some View {
-        TabView(selection: $viewModel.currentMode) {
-            chatList(for: .alice)
-                .tag(AgentMode.alice)
-
-            chatList(for: .claw)
-                .tag(AgentMode.claw)
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .animation(.easeInOut(duration: 0.2), value: viewModel.currentMode)
+        chatList
     }
 
-    private func chatList(for mode: AgentMode) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if mode == .alice {
-                        aliceDebugCard
+    @ViewBuilder
+    private var chatList: some View {
+        if viewModel.clawIsShowingAgentInbox {
+            clawAgentInboxView
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        ForEach(viewModel.clawRounds) { round in
+                            RoundView(round: round)
+                                .id(round.id)
+                        }
                     }
-
-                    ForEach(rounds(for: mode)) { round in
-                        RoundView(round: round, mode: mode)
-                            .id(round.id)
+                    .padding()
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    inputFocused = false
+                }
+                .onChange(of: viewModel.clawRounds.map { $0.id }) { _, _ in
+                    if !viewModel.isUserInteracting {
+                        withAnimation {
+                            proxy.scrollTo(viewModel.clawRounds.last?.id, anchor: .bottom)
+                        }
                     }
                 }
-                .padding()
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                inputFocused = false
-            }
-            .onChange(of: rounds(for: mode).map { $0.id }) { _, _ in
-                if !viewModel.isUserInteracting {
-                    withAnimation {
-                        proxy.scrollTo(rounds(for: mode).last?.id, anchor: .bottom)
-                    }
-                }
+                .simultaneousGesture(backToAgentInboxGesture)
             }
         }
-    }
-
-    private func rounds(for mode: AgentMode) -> [Round] {
-        switch mode {
-        case .alice:
-            return viewModel.aliceRounds
-        case .claw:
-            return viewModel.clawRounds
-        }
-    }
-
-    private var aliceDebugCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Alice 联调状态")
-                .font(.subheadline.weight(.semibold))
-
-            Text(viewModel.aliceRequestStatus)
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text("Key 来源: \(viewModel.aliceAPIKeySourceDescription)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text("Key 摘要: \(viewModel.aliceAPIKeyDebugSummary)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            HStack(spacing: 8) {
-                debugPill(title: "正在回忆", isActive: viewModel.aliceIsRecallingMemory)
-                debugPill(title: "已归档", isActive: viewModel.aliceMemoryStatusText == "已归档")
-                debugPill(title: "Retrieve", isActive: !viewModel.aliceLastRetrievedTopicTitles.isEmpty)
-                debugPill(title: "Reasoning", isActive: viewModel.aliceDidReceiveReasoning)
-                debugPill(title: "正文", isActive: viewModel.aliceDidReceiveContent)
-                debugPill(title: "Archive", isActive: viewModel.aliceLastArchiveArchivedRoundCount > 0)
-                debugPill(title: "截断", isActive: viewModel.aliceDidTrimActiveRounds)
-            }
-
-            Text("记忆状态: \(viewModel.aliceMemoryStatusText)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            if !viewModel.aliceLastRetrievedTopicTitles.isEmpty {
-                Text("命中 Topics: " + viewModel.aliceLastRetrievedTopicTitles.joined(separator: "、"))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Text("当前显示 \(viewModel.aliceActiveWindowRoundCount) 轮，完整会话已记录 \(viewModel.aliceConversationHistoryRoundCount) 轮")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text(viewModel.aliceLastArchiveSummary)
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text(viewModel.aliceLastModelResponseSummary)
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            if let errorMessage = viewModel.aliceLastErrorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(red: 249/255, green: 246/255, blue: 239/255))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    private func debugPill(title: String, isActive: Bool) -> some View {
-        Text(title)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isActive ? Color.black : Color.black.opacity(0.08))
-            .foregroundColor(isActive ? .white : .black.opacity(0.6))
-            .clipShape(Capsule())
     }
 
     private var inputBar: some View {
@@ -207,7 +141,7 @@ struct ChatView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(viewModel.currentMode == .alice ? Color(red: 240/255, green: 238/255, blue: 231/255) : Color(red: 239/255, green: 228/255, blue: 230/255))
+                    .fill(Color(red: 239/255, green: 228/255, blue: 230/255))
             )
             .frame(minHeight: 56)
 
@@ -248,59 +182,44 @@ struct ChatView: View {
     private var settingsView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text(viewModel.currentMode == .alice ? "Alice 配置" : "OpenClaw 配置")
+                Text("OpenClaw 配置")
                     .font(.title2).bold()
 
-                if viewModel.currentMode == .alice {
-                    AliceSettingsView(
-                        apiKey: Binding(
-                            get: { viewModel.aliceApiKey },
-                            set: { viewModel.aliceApiKey = $0 }
-                        ),
-                        model: Binding(
-                            get: { viewModel.aliceModel },
-                            set: { viewModel.aliceModel = $0 }
-                        ),
-                        memoryStatusText: viewModel.aliceMemoryStatusText,
-                        onResetEnvironment: {
-                            Task { await viewModel.resetAliceEnvironment() }
-                        }
-                    )
-                } else {
-                    OpenClawSettingsView(
-                        connectionMode: Binding(
-                            get: { viewModel.clawConnectionMode },
-                            set: { viewModel.clawConnectionMode = $0 }
-                        ),
-                        pairingCode: $viewModel.pairingCode,
-                        manualHost: Binding(
-                            get: { viewModel.clawManualHost },
-                            set: { viewModel.clawManualHost = $0 }
-                        ),
-                        manualPort: Binding(
-                            get: { viewModel.clawManualPort },
-                            set: { viewModel.clawManualPort = $0 }
-                        ),
-                        manualToken: Binding(
-                            get: { viewModel.clawManualToken },
-                            set: { viewModel.clawManualToken = $0 }
-                        ),
-                        rememberedTargets: viewModel.clawRememberedTargets,
-                        hasStoredManualToken: viewModel.clawHasStoredManualToken,
-                        isConnected: viewModel.clawManager.isConnected,
-                        connectionStatus: viewModel.clawManager.connectionStatus,
-                        onLoadRememberedTarget: { target in
-                            viewModel.loadRememberedClawTarget(target)
-                        },
-                        onImportConnectionText: { rawText in
-                            viewModel.importClawConnectionInfo(rawText)
-                        },
-                        onConnect: {
-                            print("Connect Button Tapped")
-                            viewModel.connectClaw()
-                        }
-                    )
-                }
+                OpenClawSettingsView(
+                    connectionMode: Binding(
+                        get: { viewModel.clawConnectionMode },
+                        set: { viewModel.clawConnectionMode = $0 }
+                    ),
+                    manualHost: Binding(
+                        get: { viewModel.clawManualHost },
+                        set: { viewModel.clawManualHost = $0 }
+                    ),
+                    manualPort: Binding(
+                        get: { viewModel.clawManualPort },
+                        set: { viewModel.clawManualPort = $0 }
+                    ),
+                    manualToken: Binding(
+                        get: { viewModel.clawManualToken },
+                        set: { viewModel.clawManualToken = $0 }
+                    ),
+                    rememberedTargets: viewModel.clawRememberedTargets,
+                    hasStoredManualToken: viewModel.clawHasStoredManualToken,
+                    isConnected: viewModel.clawManager.isConnected,
+                    connectionStatus: viewModel.clawManager.connectionStatus,
+                    onLoadRememberedTarget: { target in
+                        viewModel.loadRememberedClawTarget(target)
+                    },
+                    onImportConnectionText: { rawText in
+                        viewModel.importClawConnectionInfo(rawText)
+                    },
+                    onConnect: {
+                        print("Connect Button Tapped")
+                        viewModel.connectClaw()
+                    },
+                    onDisconnect: {
+                        viewModel.disconnectClaw()
+                    }
+                )
                 Spacer()
             }
             .padding()
@@ -331,9 +250,9 @@ struct ChatView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("关于 Thou").font(.title).bold()
-                Text("Thou 是一款极简的 AI 社交陪伴与远程控制工具。")
-                Text("Alice 模式：基于云端大模型的智能陪伴。")
-                Text("OpenClaw 模式：直连本地 Mac 的 AI 代理。")
+                Text("Thou 当前首发聚焦 OpenClaw companion。")
+                Text("你可以先选一个 agent，再进入它名下的 session 继续工作。")
+                Text("当前版本的目标是把 iPhone 变成连接 Mac 上 OpenClaw 的低摩擦 companion。")
             }
             .padding()
         }
@@ -345,29 +264,173 @@ struct ChatView: View {
     }
 
     private var titleMenu: some View {
-        Menu {
-            Button("Readme") { viewModel.currentPage = .readme }
-            Button("Fun (Coming Soon)") { viewModel.currentPage = .fun }
-            if viewModel.currentPage != .chat {
-                Divider()
-                Button("返回聊天") { viewModel.currentPage = .chat }
-            }
-        } label: {
-            HStack {
-                Text(viewModel.currentPage == .chat ? viewModel.currentMode.rawValue : (viewModel.currentPage == .settings ? "设置" : "说明"))
+        Group {
+            if viewModel.currentPage == .chat {
+                Text(viewModel.clawIsShowingAgentInbox ? "Agents" : viewModel.clawSelectedAgentName)
                     .font(.headline)
                     .foregroundColor(.black)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+            } else {
+                Menu {
+                    Button("Readme") { viewModel.currentPage = .readme }
+                    Button("Fun (Coming Soon)") { viewModel.currentPage = .fun }
+                    if viewModel.currentPage != .chat {
+                        Divider()
+                        Button("返回聊天") { viewModel.currentPage = .chat }
+                    }
+                } label: {
+                    HStack {
+                        Text(viewModel.currentPage == .settings ? "设置" : "说明")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                    }
+                }
             }
         }
+    }
+
+    private var leadingToolbarItem: some View {
+        Group {
+            if viewModel.currentPage == .chat {
+                if viewModel.clawIsShowingAgentInbox {
+                    EmptyView()
+                } else {
+                    HStack(spacing: 14) {
+                        Button(action: {
+                            viewModel.showClawAgentInbox()
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                        }
+
+                        Button(action: {
+                            viewModel.toggleClawSessionPicker()
+                        }) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(.black)
+                        }
+                    }
+                }
+            } else {
+                EmptyView()
+            }
+        }
+    }
+
+    private var backToAgentInboxGesture: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onEnded { value in
+                guard viewModel.currentPage == .chat,
+                      !viewModel.clawIsShowingAgentInbox else {
+                    return
+                }
+
+                let horizontalTravel = value.translation.width
+                let verticalTravel = abs(value.translation.height)
+
+                guard horizontalTravel > 90, verticalTravel < 80 else {
+                    return
+                }
+
+                viewModel.showClawAgentInbox()
+            }
+    }
+
+    private var clawAgentInboxView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Agents")
+                    .font(.title2.weight(.bold))
+
+                Text("像聊天对象列表一样先选一个 agent，再进入它名下的 session。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                ForEach(viewModel.clawAgentSummaries) { agent in
+                    Button(action: {
+                        viewModel.selectClawAgent(agent.id)
+                    }) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(agent.name)
+                                        .font(.headline)
+                                        .foregroundColor(.black)
+
+                                    Text(agent.subtitle)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                if agent.unreadCount > 0 {
+                                    Text("\(agent.unreadCount)")
+                                        .font(.caption2.weight(.bold))
+                                        .frame(minWidth: 22, minHeight: 22)
+                                        .background(Color.black)
+                                        .foregroundColor(.white)
+                                        .clipShape(Capsule())
+                                }
+                            }
+
+                            if let preview = agent.lastPreview, !preview.isEmpty {
+                                Text(preview)
+                                    .font(.subheadline)
+                                    .foregroundColor(.black.opacity(0.75))
+                                    .lineLimit(2)
+                            }
+
+                            if let updatedAt = agent.updatedAt {
+                                Text(relativeDate(updatedAt))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color(red: 246/255, green: 241/255, blue: 241/255))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                        )
+                    }
+                }
+            }
+            .padding()
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            inputFocused = false
+            viewModel.hideClawSessionPicker()
+        }
+    }
+
+    private func relativeDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func sessionTitle(_ session: OpenClawSessionPickerItem) -> String {
+        if session.key == viewModel.clawSelectedSessionKey {
+            return "✓ " + session.title
+        }
+
+        return session.title
     }
 }
 
 struct RoundView: View {
     let round: Round
-    let mode: AgentMode
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -376,7 +439,7 @@ struct RoundView: View {
                 Spacer()
                 Text(round.userPrompt.content)
                     .padding(12)
-                    .background(mode == .alice ? Color(red: 240/255, green: 238/255, blue: 231/255) : Color(red: 242/255, green: 222/255, blue: 221/255))
+                    .background(Color(red: 242/255, green: 222/255, blue: 221/255))
                     .cornerRadius(16)
                     .foregroundColor(.black)
             }

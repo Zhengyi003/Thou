@@ -47,7 +47,7 @@ class OpenRouterClient: ObservableObject {
         self.session = URLSession(configuration: configuration)
     }
     
-    func streamChat(messages: [Message], model: String = "x-ai/grok-4.1-fast") async throws -> AsyncThrowingStream<ChatDelta, Error> {
+    func streamChat(messages: [Message], model: String = AliceConfigStore.defaultModel) async throws -> AsyncThrowingStream<ChatDelta, Error> {
         var payload: [String: Any] = [
             "model": model,
             "messages": messages.map(payloadMessage),

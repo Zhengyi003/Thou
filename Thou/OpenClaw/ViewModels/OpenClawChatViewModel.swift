@@ -7,9 +7,15 @@
 
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 final class OpenClawChatViewModel: ObservableObject {
+    private enum ConnectionTrigger {
+        case userInitiated
+        case autoReconnect
+    }
+
     private enum DefaultsKey {
         static let connectionProfile = "OpenClawConnectionProfile"
         static let legacyConnectionMode = "OpenClawConnectionMode"
@@ -61,6 +67,8 @@ final class OpenClawChatViewModel: ObservableObject {
     @Published var draft: String = ""
     @Published var isSending: Bool = false
     @Published var isLoadingHistory: Bool = false
+    @Published var isShowingAgentInbox: Bool = true
+    @Published var isShowingSessionPicker: Bool = false
     @Published private var connectionProfile = OpenClawConnectionProfile()
     @Published var connectionMode: OpenClawConnectionMode = .pairing {
         didSet {
@@ -106,6 +114,11 @@ final class OpenClawChatViewModel: ObservableObject {
     }
     @Published var clawManager = ClawConnectionManager()
 
+    @Published private(set) var agentSummaries: [OpenClawAgentSummary]
+    @Published private(set) var sessionPickerItems: [OpenClawSessionPickerItem]
+    @Published private(set) var selectedAgentId: String = "main"
+    @Published private(set) var selectedSessionKey: String = "agent:main:main"
+
     var canReconnectAutomatically: Bool {
         switch connectionMode {
         case .pairing:
@@ -129,17 +142,45 @@ final class OpenClawChatViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var pendingStreamingContent = ""
     private var chunkFlushTask: Task<Void, Never>?
+    private var autoReconnectTask: Task<Void, Never>?
     private var didAttemptAutoReconnect = false
     private let chunkFlushDelayNanoseconds: UInt64 = 80_000_000
+    private let autoReconnectBaseDelayNanoseconds: UInt64 = 3_000_000_000
+    private let autoReconnectMaxDelayNanoseconds: UInt64 = 15_000_000_000
+    private var autoReconnectAttemptCount = 0
 
     init() {
+        agentSummaries = [OpenClawChatViewModel.fallbackAgentSummary()]
+        sessionPickerItems = [OpenClawChatViewModel.mainSessionItem(for: "main")]
         loadConnectionSettings()
         setupClawStream()
         bindClawManagerState()
         attemptAutoReconnectIfPossible()
+        applyDefaultSelectionIfNeeded()
+    }
+
+    var selectedAgentSummary: OpenClawAgentSummary? {
+        agentSummaries.first(where: { $0.id == selectedAgentId })
+    }
+
+    var selectedAgentName: String {
+        selectedAgentSummary?.name ?? "OpenClaw"
+    }
+
+    var selectedSessionTitle: String {
+        sessionPickerItems.first(where: { $0.key == selectedSessionKey })?.title ?? "Main Session"
+    }
+
+    var selectedSessionPreview: String? {
+        sessionPickerItems.first(where: { $0.key == selectedSessionKey })?.preview
     }
 
     func connect() {
+        connect(trigger: .userInitiated)
+    }
+
+    private func connect(trigger: ConnectionTrigger) {
+        cancelPendingAutoReconnect(resetAttemptCounter: trigger == .userInitiated)
         switch connectionMode {
         case .pairing:
             guard !pairingCode.isEmpty else {
@@ -153,6 +194,7 @@ final class OpenClawChatViewModel: ObservableObject {
             }
 
             let pairingTargets = buildPairingTargets(from: result)
+            clawManager.connectionStatus = connectionStatusForOutgoingConnection(trigger: trigger)
             clawManager.connect(targets: pairingTargets, token: result.tokenPrefix)
 
         case .manualHost:
@@ -184,8 +226,81 @@ final class OpenClawChatViewModel: ObservableObject {
                 $0.setManualToken(token)
             }
 
-            clawManager.connect(host: normalizedTarget.host, port: normalizedTarget.port, token: token)
+            let manualTargets = buildManualTargets(primaryHost: normalizedTarget.host, port: normalizedTarget.port)
+            clawManager.connectionStatus = connectionStatusForOutgoingConnection(trigger: trigger)
+            clawManager.connect(targets: manualTargets, token: token)
         }
+    }
+
+    func disconnect() {
+        cancelPendingAutoReconnect(resetAttemptCounter: true)
+        clawManager.disconnect()
+    }
+
+    func showAgentInbox() {
+        isShowingSessionPicker = false
+        isShowingAgentInbox = true
+    }
+
+    func selectAgent(_ agentId: String) {
+        guard agentSummaries.contains(where: { $0.id == agentId }) else {
+            return
+        }
+
+        selectedAgentId = agentId
+        selectedSessionKey = Self.mainSessionKey(for: agentId)
+        isShowingSessionPicker = false
+        isShowingAgentInbox = false
+        rounds = []
+
+        guard clawManager.isConnected else {
+            sessionPickerItems = [Self.mainSessionItem(for: agentId)]
+            return
+        }
+
+        Task {
+            await loadSessionsForSelectedAgent()
+            await reloadSelectedHistory()
+        }
+    }
+
+    func toggleSessionPicker() {
+        guard !isShowingAgentInbox else {
+            return
+        }
+        isShowingSessionPicker.toggle()
+    }
+
+    func hideSessionPicker() {
+        isShowingSessionPicker = false
+    }
+
+    func selectSession(_ sessionKey: String) {
+        guard sessionPickerItems.contains(where: { $0.key == sessionKey }) else {
+            return
+        }
+
+        selectedSessionKey = sessionKey
+        isShowingSessionPicker = false
+
+        guard clawManager.isConnected else {
+            return
+        }
+
+        Task {
+            await reloadSelectedHistory()
+        }
+    }
+
+    func handleAppDidBecomeActive() {
+        guard !clawManager.isConnected,
+              canReconnectAutomatically,
+              !clawManager.didUserDisconnectManually else {
+            return
+        }
+
+        clawManager.connectionStatus = "正在恢复与 OpenClaw 的连接..."
+                connect(trigger: .autoReconnect)
     }
 
     func reloadSelectedHistory() async {
@@ -202,7 +317,11 @@ final class OpenClawChatViewModel: ObservableObject {
         }
 
         do {
-            let history = try await clawManager.fetchHistory(limit: 80)
+            let history = try await clawManager.fetchHistory(
+                agentId: selectedAgentId,
+                sessionKey: selectedSessionKey,
+                limit: 80
+            )
             rounds = Self.buildRounds(from: history)
         } catch {
             clawManager.connectionStatus = "当前对话同步失败"
@@ -221,7 +340,7 @@ final class OpenClawChatViewModel: ObservableObject {
 
         if clawManager.isConnected {
             print("Sending to Claw: \(text)")
-            clawManager.sendMessage(text)
+            clawManager.sendMessage(text, sessionKey: selectedSessionKey, agentId: selectedAgentId)
         } else if let index = rounds.firstIndex(where: { $0.id == newRound.id }) {
             rounds[index].aiResponse = Message(role: "assistant", content: "未连接到 OpenClaw，请检查配对码设置。")
             rounds[index].isStreaming = false
@@ -247,7 +366,7 @@ final class OpenClawChatViewModel: ObservableObject {
         }
 
         clawManager.connectionStatus = "已导入连接信息，正在连接 \(card.label)..."
-        connect()
+        connect(trigger: .userInitiated)
     }
 
     private func setupClawStream() {
@@ -266,9 +385,45 @@ final class OpenClawChatViewModel: ObservableObject {
                     self.failLatestRound(message: message)
                 case .connectionClosed(let status):
                     self.failLatestRound(message: status)
+                    self.scheduleAutoReconnectIfNeeded()
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func applyDefaultSelectionIfNeeded() {
+        if selectedAgentSummary == nil, let firstAgent = agentSummaries.first {
+            selectedAgentId = firstAgent.id
+        }
+
+        if !sessionPickerItems.contains(where: { $0.key == selectedSessionKey }), let firstSession = sessionPickerItems.first {
+            selectedSessionKey = firstSession.key
+        }
+    }
+
+    private static func fallbackAgentSummary() -> OpenClawAgentSummary {
+        OpenClawAgentSummary(
+            id: "main",
+            name: "Main Agent",
+            subtitle: "Default workspace agent",
+            lastPreview: nil,
+            updatedAt: nil,
+            unreadCount: 0
+        )
+    }
+
+    private static func mainSessionKey(for agentId: String) -> String {
+        "agent:\(agentId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()):main"
+    }
+
+    private static func mainSessionItem(for agentId: String) -> OpenClawSessionPickerItem {
+        OpenClawSessionPickerItem(
+            key: mainSessionKey(for: agentId),
+            title: "Main Session",
+            preview: nil,
+            updatedAt: nil,
+            isMain: true
+        )
     }
 
     private func bindClawManagerState() {
@@ -278,11 +433,11 @@ final class OpenClawChatViewModel: ObservableObject {
             .sink { [weak self] connected in
                 guard let self else { return }
                 if connected {
+                    self.cancelPendingAutoReconnect(resetAttemptCounter: true)
                     self.recordSuccessfulConnectionIfNeeded()
                     Task {
-                        if self.rounds.isEmpty {
-                            await self.reloadSelectedHistory()
-                        }
+                        await self.refreshRemoteAgentContext()
+                        await self.reloadSelectedHistory()
                     }
                 }
             }
@@ -302,6 +457,166 @@ final class OpenClawChatViewModel: ObservableObject {
             return
         }
         clawManager.connectionStatus = "已连接到 OpenClaw"
+    }
+
+    private func connectionStatusForOutgoingConnection(trigger: ConnectionTrigger) -> String {
+        switch trigger {
+        case .userInitiated:
+            return "正在连接到 OpenClaw..."
+        case .autoReconnect:
+            return "正在恢复与 OpenClaw 的连接..."
+        }
+    }
+
+    private func scheduleAutoReconnectIfNeeded() {
+        guard shouldAttemptForegroundAutoReconnect else {
+            return
+        }
+        guard autoReconnectTask == nil else {
+            return
+        }
+
+        autoReconnectAttemptCount += 1
+        let multiplier = UInt64(min(max(autoReconnectAttemptCount, 1), 5))
+        let delay = min(autoReconnectBaseDelayNanoseconds * multiplier, autoReconnectMaxDelayNanoseconds)
+
+        clawManager.connectionStatus = autoReconnectAttemptCount == 1
+            ? "连接已断开，准备自动重连..."
+            : "连接仍未恢复，稍后重试..."
+
+        autoReconnectTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.autoReconnectTask = nil }
+
+            do {
+                try await Task.sleep(nanoseconds: delay)
+            } catch {
+                return
+            }
+
+            guard self.shouldAttemptForegroundAutoReconnect else {
+                return
+            }
+
+            self.clawManager.connectionStatus = "正在尝试恢复与 OpenClaw 的连接..."
+            self.connect(trigger: .autoReconnect)
+        }
+    }
+
+    private func cancelPendingAutoReconnect(resetAttemptCounter: Bool) {
+        autoReconnectTask?.cancel()
+        autoReconnectTask = nil
+        if resetAttemptCounter {
+            autoReconnectAttemptCount = 0
+        }
+    }
+
+    private func refreshRemoteAgentContext() async {
+        guard clawManager.isConnected else {
+            return
+        }
+
+        do {
+            let baseAgents = try await clawManager.fetchAgents()
+            let enrichedAgents = try await enrichAgentSummaries(baseAgents)
+            let resolvedAgents = enrichedAgents.isEmpty ? [Self.fallbackAgentSummary()] : enrichedAgents
+
+            agentSummaries = resolvedAgents
+            if !resolvedAgents.contains(where: { $0.id == selectedAgentId }) {
+                selectedAgentId = resolvedAgents.first?.id ?? "main"
+            }
+
+            await loadSessionsForSelectedAgent()
+        } catch {
+            print("Claw agents load error: \(error)")
+            if agentSummaries.isEmpty {
+                agentSummaries = [Self.fallbackAgentSummary()]
+            }
+            if sessionPickerItems.isEmpty {
+                sessionPickerItems = [Self.mainSessionItem(for: selectedAgentId)]
+            }
+        }
+    }
+
+    private func enrichAgentSummaries(_ agents: [OpenClawAgentSummary]) async throws -> [OpenClawAgentSummary] {
+        var enriched: [OpenClawAgentSummary] = []
+        for agent in agents {
+            let sessions = try? await clawManager.fetchSessions(agentId: agent.id, limit: 6)
+            let latest = sessions?
+                .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+                .first
+            enriched.append(
+                OpenClawAgentSummary(
+                    id: agent.id,
+                    name: agent.name,
+                    subtitle: agent.subtitle,
+                    lastPreview: latest?.preview ?? latest?.title,
+                    updatedAt: latest?.updatedAt,
+                    unreadCount: 0
+                )
+            )
+        }
+
+        return enriched.sorted { left, right in
+            let leftDate = left.updatedAt ?? .distantPast
+            let rightDate = right.updatedAt ?? .distantPast
+            if leftDate != rightDate {
+                return leftDate > rightDate
+            }
+            return left.name.localizedCaseInsensitiveCompare(right.name) == .orderedAscending
+        }
+    }
+
+    private func loadSessionsForSelectedAgent() async {
+        guard clawManager.isConnected else {
+            sessionPickerItems = [Self.mainSessionItem(for: selectedAgentId)]
+            return
+        }
+
+        do {
+            let sessions = try await clawManager.fetchSessions(agentId: selectedAgentId, limit: 24)
+            let mainKey = Self.mainSessionKey(for: selectedAgentId)
+            var items = sessions.map { session in
+                let isMain = session.key.caseInsensitiveCompare(mainKey) == .orderedSame
+                return OpenClawSessionPickerItem(
+                    key: session.key,
+                    title: isMain ? "Main Session" : session.title,
+                    preview: session.preview,
+                    updatedAt: session.updatedAt,
+                    isMain: isMain
+                )
+            }
+
+            if !items.contains(where: { $0.key.caseInsensitiveCompare(mainKey) == .orderedSame }) {
+                items.insert(Self.mainSessionItem(for: selectedAgentId), at: 0)
+            }
+
+            items.sort { left, right in
+                if left.isMain != right.isMain {
+                    return left.isMain
+                }
+                return (left.updatedAt ?? .distantPast) > (right.updatedAt ?? .distantPast)
+            }
+
+            sessionPickerItems = items
+            if !items.contains(where: { $0.key.caseInsensitiveCompare(selectedSessionKey) == .orderedSame }) {
+                selectedSessionKey = items.first?.key ?? mainKey
+            }
+        } catch {
+            print("Claw sessions load error: \(error)")
+            sessionPickerItems = [Self.mainSessionItem(for: selectedAgentId)]
+            selectedSessionKey = sessionPickerItems.first?.key ?? Self.mainSessionKey(for: selectedAgentId)
+        }
+    }
+
+    private var shouldAttemptForegroundAutoReconnect: Bool {
+        guard canReconnectAutomatically,
+              !clawManager.didUserDisconnectManually,
+              !clawManager.isConnected else {
+            return false
+        }
+
+        return UIApplication.shared.applicationState == .active
     }
 
     private func markLatestRoundStreaming() {
@@ -407,7 +722,7 @@ final class OpenClawChatViewModel: ObservableObject {
         }
 
         clawManager.connectionStatus = "正在恢复与 OpenClaw 的连接..."
-        connect()
+        connect(trigger: .autoReconnect)
     }
 
     private func applyingBootstrapDefaults(to profile: OpenClawConnectionProfile) -> OpenClawConnectionProfile {
@@ -551,6 +866,12 @@ final class OpenClawChatViewModel: ObservableObject {
         }
 
         return targets
+    }
+
+    private func buildManualTargets(primaryHost: String, port: Int) -> [OpenClawConnectionTarget] {
+        [
+            OpenClawConnectionTarget(host: primaryHost, port: port, source: .manual)
+        ]
     }
 
     private static func buildRounds(from history: [ClawHistoryMessage]) -> [Round] {

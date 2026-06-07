@@ -10,7 +10,7 @@ import Combine
 
 @MainActor
 final class AliceConfigStore: ObservableObject {
-    static let defaultModel = "x-ai/grok-4.1-fast"
+    static let defaultModel = "deepseek/deepseek-v4-flash"
     static let bundledSecretsFileName = "AliceLocalSecrets"
 
     private enum Keys {
@@ -59,11 +59,17 @@ final class AliceConfigStore: ObservableObject {
         }
 
         let storedModel = userDefaults.string(forKey: Keys.selectedModel)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedStoredModel = Self.normalizeModel(storedModel)
+        let normalizedBundledModel = Self.normalizeModel(bundledSecrets.model ?? "")
         let resolvedModel: String
-        if storedModel.isEmpty {
-            resolvedModel = bundledSecrets.model?.isEmpty == false ? bundledSecrets.model! : Self.defaultModel
+        if normalizedStoredModel.isEmpty {
+            resolvedModel = normalizedBundledModel.isEmpty ? Self.defaultModel : normalizedBundledModel
         } else {
-            resolvedModel = storedModel
+            resolvedModel = normalizedStoredModel
+        }
+
+        if normalizedStoredModel != storedModel {
+            userDefaults.set(resolvedModel, forKey: Keys.selectedModel)
         }
 
         self.apiKey = resolvedAPIKey
@@ -106,5 +112,21 @@ final class AliceConfigStore: ObservableObject {
         }
 
         return key.hasPrefix("sk-or-") && key.count >= 16
+    }
+
+    private static func normalizeModel(_ rawModel: String) -> String {
+        let model = rawModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty else {
+            return ""
+        }
+
+        switch model.lowercased() {
+        case "x-ai/grok-4.1-fast", "grok-4.1-fast":
+            return defaultModel
+        case "deepseek-v4-flash":
+            return defaultModel
+        default:
+            return model
+        }
     }
 }

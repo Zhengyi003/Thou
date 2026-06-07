@@ -8,7 +8,7 @@
 		<true/>
 	</dict>
 	<key>OpenClawBootstrapHost</key>
-	<string>mac-mini.tailab4be7.ts.net</string>
+	<string>100.77.184.77</string>
 	<key>OpenClawBootstrapPort</key>
 	<integer>8080</integer>
 	<key>OpenClawBootstrapToken</key>

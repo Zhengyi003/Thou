@@ -80,7 +80,6 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				FE616C7A2F53123F00E5CEB2 /* Thou (iOS) */,
 				FECC8C492F1FB32D008281F9 /* Thou */,
 			);
 			name = Thou;
