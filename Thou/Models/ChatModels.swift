@@ -7,11 +7,6 @@
 
 import Foundation
 
-enum AgentMode: String, Codable, CaseIterable {
-    case alice = "Alice"
-    case claw = "OpenClaw"
-}
-
 enum PageType: Equatable {
     case chat
     case settings

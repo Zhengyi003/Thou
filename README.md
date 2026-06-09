@@ -30,7 +30,7 @@ The current release does not promise:
 
 - [Thou/](Thou) contains the iOS app source.
 - [Thou.xcodeproj/](Thou.xcodeproj) contains the Xcode project.
-- [Thou (iOS)/说明.md](Thou%20(iOS)/说明.md), [Thou (iOS)/进度.md](Thou%20(iOS)/进度.md), and [Thou (iOS)/发现.md](Thou%20(iOS)/发现.md) store the project state anchor for agent handoff.
+- The public repository root is also the project root used for shipping and App Store preparation.
 
 ## Validation focus
 
@@ -45,4 +45,4 @@ Before a public release or TestFlight build, verify:
 
 - The app still keeps ATS broadly relaxed while the bridge uses plaintext WebSocket.
 - App Store review prep is not complete in this repository state.
-- Alice code assets may remain in source as future material, but the public shell is narrowed to OpenClaw companion flow.
+- The public app no longer carries Alice product flows; only Methodology A / B text assets remain as future material.

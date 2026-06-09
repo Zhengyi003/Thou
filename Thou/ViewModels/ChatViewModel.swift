@@ -2,7 +2,7 @@
  Thou 主聊天页的状态编排层。
 
  这个文件现在主要承担 App Shell 层的协调职责：
- 管理页面模式切换、共享壳层状态，并组合 Alice / OpenClaw 两个模块 ViewModel。
+ 管理页面切换、共享壳层状态，并组合 OpenClaw companion 模块 ViewModel。
  */
 
 import Foundation
@@ -12,7 +12,6 @@ import Combine
 @MainActor
 class ChatViewModel: ObservableObject {
     @Published var isUserInteracting: Bool = false
-    @Published var currentMode: AgentMode = .claw
     @Published var currentPage: PageType = .chat
     
     private var cancellables = Set<AnyCancellable>()
@@ -122,7 +121,7 @@ class ChatViewModel: ObservableObject {
     }
 
     var clawNeedsSettingsAttention: Bool {
-        currentMode == .claw && !clawManager.isConnected && clawCanReconnectAutomatically
+        !clawManager.isConnected && clawCanReconnectAutomatically
     }
 
     private func bindModuleState() {

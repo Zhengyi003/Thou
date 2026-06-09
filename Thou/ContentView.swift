@@ -2,7 +2,7 @@
  Thou 应用的主界面入口。
 
  这个文件负责把根导航容器和主聊天视图接到一起，
- 让 Alice / OpenClaw 的统一聊天壳在应用启动后成为默认首页。
+ 让 OpenClaw companion 聊天壳在应用启动后成为默认首页。
  */
 
 import SwiftUI

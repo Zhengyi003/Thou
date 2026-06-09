@@ -26,7 +26,7 @@ struct ChatView: View {
                 }
             }
             
-            if viewModel.currentPage == .chat && !(viewModel.currentMode == .claw && viewModel.clawIsShowingAgentInbox) {
+            if viewModel.currentPage == .chat && !viewModel.clawIsShowingAgentInbox {
                 inputBar
             }
         }
@@ -55,7 +55,7 @@ struct ChatView: View {
         .confirmationDialog(
             "选择 Session",
             isPresented: Binding(
-                get: { viewModel.currentMode == .claw && viewModel.currentPage == .chat && viewModel.clawIsShowingSessionPicker },
+                get: { viewModel.currentPage == .chat && viewModel.clawIsShowingSessionPicker },
                 set: { isPresented in
                     if !isPresented {
                         viewModel.hideClawSessionPicker()
